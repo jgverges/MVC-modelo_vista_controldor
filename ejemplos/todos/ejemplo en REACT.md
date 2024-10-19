@@ -1,48 +1,30 @@
-#  MVC en TypeScript. 
+# MVC (To-Do List) con React. 
 
-## Aplicación para gestionar una lista de tareas.
 
 ### Estructura del Proyecto
 
 ```
-/mvc-example
+/react-mvc-example
 ├── /src
-│   ├── app.ts
-│   ├── model.ts
-│   ├── view.ts
-│   └── controller.ts
-├── tsconfig.json
-└── package.json
+│   ├── App.tsx
+│   ├── Model.ts
+│   ├── View.tsx
+│   └── Controller.tsx
+├── index.tsx
+├── package.json
+└── tsconfig.json
 ```
 
 ### 1. Configuración Inicial
 
-Asegúrate de tener TypeScript instalado. Si no lo tienes, puedes instalarlo usando npm:
+Asegúrate de tener un proyecto de React configurado.
 
-```bash
-npm install -g typescript
-```
+### 2. Modelo (`Model.ts`)
 
-Crea un archivo `tsconfig.json` en la raíz de tu proyecto:
-
-```json
-{
-  "compilerOptions": {
-    "target": "es6",
-    "module": "commonjs",
-    "outDir": "./dist",
-    "strict": true
-  },
-  "include": ["src/**/*"]
-}
-```
-
-### 2. Modelo (`model.ts`)
-
-Aquí definimos la estructura del modelo de la tarea.
+Define el modelo de la tarea.
 
 ```typescript
-// src/model.ts
+// src/Model.ts
 
 export interface Task {
     id: number;
@@ -72,110 +54,146 @@ export class TaskModel {
 }
 ```
 
-### 3. Vista (`view.ts`)
+### 3. Vista (`View.tsx`)
 
-La vista se encarga de mostrar los datos al usuario.
+Crea un componente para mostrar la lista de tareas.
 
 ```typescript
-// src/view.ts
+// src/View.tsx
 
-import { Task } from './model';
+import React from 'react';
+import { Task } from './Model';
 
-export class TaskView {
-    public render(tasks: Task[]): void {
-        console.clear();
-        console.log("Lista de Tareas:");
-        tasks.forEach(task => {
-            const status = task.completed ? "[X]" : "[ ]";
-            console.log(`${status} ${task.title} (ID: ${task.id})`);
-        });
-        console.log("\nEscribe 'add <título>' para agregar una tarea o 'toggle <id>' para cambiar su estado.");
-    }
+interface ViewProps {
+    tasks: Task[];
+    onToggleTask: (id: number) => void;
 }
-```
 
-### 4. Controlador (`controller.ts`)
-
-El controlador gestiona la interacción entre el modelo y la vista.
-
-```typescript
-// src/controller.ts
-
-import { TaskModel } from './model';
-import { TaskView } from './view';
-
-export class TaskController {
-    private model: TaskModel;
-    private view: TaskView;
-
-    constructor(model: TaskModel, view: TaskView) {
-        this.model = model;
-        this.view = view;
-    }
-
-    public addTask(title: string): void {
-        this.model.addTask(title);
-        this.updateView();
-    }
-
-    public toggleTask(id: number): void {
-        this.model.toggleTask(id);
-        this.updateView();
-    }
-
-    private updateView(): void {
-        const tasks = this.model.getTasks();
-        this.view.render(tasks);
-    }
-}
-```
-
-### 5. Aplicación Principal (`app.ts`)
-
-En el archivo principal, inicializamos el modelo, la vista y el controlador, y gestionamos la entrada del usuario.
-
-```typescript
-// src/app.ts
-
-import { TaskModel } from './model';
-import { TaskView } from './view';
-import { TaskController } from './controller';
-
-const model = new TaskModel();
-const view = new TaskView();
-const controller = new TaskController(model, view);
-
-// Función para simular entrada del usuario
-const simulateUserInput = (input: string) => {
-    const [command, ...args] = input.split(' ');
-    if (command === 'add') {
-        controller.addTask(args.join(' '));
-    } else if (command === 'toggle' && args[0]) {
-        const id = parseInt(args[0]);
-        controller.toggleTask(id);
-    }
+const TaskView: React.FC<ViewProps> = ({ tasks, onToggleTask }) => {
+    return (
+        <div>
+            <h1>Lista de Tareas</h1>
+            <ul>
+                {tasks.map(task => (
+                    <li key={task.id} onClick={() => onToggleTask(task.id)}>
+                        {task.completed ? <s>{task.title}</s> : task.title}
+                    </li>
+                ))}
+            </ul>
+        </div>
+    );
 };
 
-// Simulando algunas interacciones del usuario
-simulateUserInput('add Comprar leche');
-simulateUserInput('add Hacer la tarea');
-simulateUserInput('toggle 1');
-simulateUserInput('toggle 2');
+export default TaskView;
 ```
 
-### 6. Compilación y Ejecución
+### 4. Controlador (`Controller.tsx`)
 
-Compila el código TypeScript y ejecuta la aplicación:
+El controlador maneja la lógica de la aplicación y conecta el modelo y la vista.
+
+```typescript
+// src/Controller.tsx
+
+import React, { useState } from 'react';
+import { TaskModel } from './Model';
+import TaskView from './View';
+
+const TaskController: React.FC = () => {
+    const [model] = useState(new TaskModel());
+    const [tasks, setTasks] = useState(model.getTasks());
+
+    const addTask = (title: string) => {
+        model.addTask(title);
+        setTasks(model.getTasks());
+    };
+
+    const toggleTask = (id: number) => {
+        model.toggleTask(id);
+        setTasks(model.getTasks());
+    };
+
+    const handleAddTask = (event: React.FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        const title = (event.currentTarget.elements[0] as HTMLInputElement).value;
+        if (title) {
+            addTask(title);
+            (event.currentTarget.elements[0] as HTMLInputElement).value = '';
+        }
+    };
+
+    return (
+        <div>
+            <form onSubmit={handleAddTask}>
+                <input type="text" placeholder="Nueva tarea" />
+                <button type="submit">Agregar</button>
+            </form>
+            <TaskView tasks={tasks} onToggleTask={toggleTask} />
+        </div>
+    );
+};
+
+export default TaskController;
+```
+
+### 5. Aplicación Principal (`App.tsx`)
+
+En el archivo principal, renderiza el controlador.
+
+```typescript
+// src/App.tsx
+
+import React from 'react';
+import TaskController from './Controller';
+
+const App: React.FC = () => {
+    return (
+        <div>
+            <TaskController />
+        </div>
+    );
+};
+
+export default App;
+```
+
+### 6. Entrada de la Aplicación (`index.tsx`)
+
+Asegúrate de que tu entrada de la aplicación esté configurada correctamente.
+
+```typescript
+// src/index.tsx
+
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App';
+import './index.css';
+
+const root = ReactDOM.createRoot(document.getElementById('root')!);
+root.render(
+    <React.StrictMode>
+        <App />
+    </React.StrictMode>
+);
+```
+
+### 7. Ejecución
+
+Ahora, puedes ejecutar la aplicación:
 
 ```bash
-tsc
-node dist/app.js
+npm start
 ```
 
 ### Resultado
 
-Verás una lista de tareas en la consola, y podrás agregar 
-nuevas tareas o cambiar su estado mediante los comandos que simula la función `simulateUserInput`.
+Verás un formulario para agregar nuevas tareas y una lista de tareas que puedes marcar como completadas al hacer clic sobre ellas.
 
-Este ejemplo es básico, pero ilustra cómo se puede implementar el patrón MVC en TypeScript. 
-Puedes expandirlo añadiendo más funcionalidades, como eliminar tareas o persistir los datos en almacenamiento. 
+### Resumen
+
+En este ejemplo:
+
+- **Modelo (`Model.ts`)**: Define la estructura de los datos y la lógica de negocio.
+- **Vista (`View.tsx`)**: Representa la interfaz de usuario y presenta los datos.
+- **Controlador (`Controller.tsx`)**: Maneja la lógica de la aplicación, interactúa con el modelo y actualiza la vista.
+
+Este enfoque muestra cómo se puede aplicar el patrón MVC en una aplicación de React, manteniendo la separación de preocupaciones. ¡Espero que te resulte útil!
