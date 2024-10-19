@@ -1,6 +1,6 @@
-# TODOS CON REACT EN MVC
+# TODOS MVC
 
-### Estructura del Proyecto 
+### Estructura del Proyecto
 
 ```
 /react-mvc-complex-example
@@ -11,7 +11,8 @@
 │   │   ├── Navbar.tsx
 │   │   ├── TaskView.tsx
 │   │   ├── TaskForm.tsx
-│   │   └── TaskList.tsx
+│   │   ├── TaskList.tsx
+│   │   └── TaskDetailView.tsx
 │   ├── /models
 │   │   └── TaskModel.ts
 │   ├── /controllers
@@ -32,7 +33,6 @@
 
 ### 1. Componente de Encabezado (`Header.tsx`)
 
-
 ```typescript
 // src/components/Header.tsx
 
@@ -50,8 +50,6 @@ export default Header;
 ```
 
 ### 2. Componente de Navegación (`Navbar.tsx`)
-
-Este componente contendrá enlaces para navegar entre las vistas.
 
 ```typescript
 // src/components/Navbar.tsx
@@ -72,8 +70,6 @@ export default Navbar;
 ```
 
 ### 3. Componente de Diseño Principal (`MainLayout.tsx`)
-
-Un layout que incluye el encabezado y la barra de navegación.
 
 ```typescript
 // src/layouts/MainLayout.tsx
@@ -97,108 +93,177 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 export default MainLayout;
 ```
 
-### 4. Controlador para Detalles de Tareas (`TaskDetailController.tsx`)
-
-Vamos a crear un controlador que muestre los detalles de una tarea específica.
+### 4. Modelo (`TaskModel.ts`)
 
 ```typescript
-// src/controllers/TaskDetailController.tsx
+// src/models/TaskModel.ts
 
-import React from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { useTasks } from '../hooks/useTasks';
 import { Task } from '../types/Task';
 
-const TaskDetailController: React.FC = () => {
-    const { id } = useParams<{ id: string }>();
-    const { tasks } = useTasks();
-    const task: Task | undefined = tasks.find(t => t.id === Number(id));
+const apiUrl = 'https://jsonplaceholder.typicode.com/todos';
 
-    if (!task) {
-        return <div>Tarea no encontrada</div>;
+export const fetchTasks = async (): Promise<Task[]> => {
+    const response = await fetch(apiUrl);
+    return response.json();
+};
+
+export const addTask = async (title: string): Promise<Task> => {
+    const newTask: Omit<Task, 'id'> = { title, completed: false };
+    const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newTask),
+    });
+    return response.json();
+};
+
+export const updateTask = async (task: Task): Promise<Task> => {
+    const response = await fetch(`${apiUrl}/${task.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(task),
+    });
+    return response.json();
+};
+
+export const deleteTask = async (id: number): Promise<void> => {
+    await fetch(`${apiUrl}/${id}`, {
+        method: 'DELETE',
+    });
+};
+```
+
+### 5. Estado Global con Zustand (`useTaskStore.ts`)
+
+```typescript
+// src/stores/useTaskStore.ts
+
+import create from 'zustand';
+import { Task } from '../types/Task';
+
+interface TaskStore {
+    tasks: Task[];
+    setTasks: (tasks: Task[]) => void;
+}
+
+export const useTaskStore = create<TaskStore>(set => ({
+    tasks: [],
+    setTasks: (tasks) => set({ tasks }),
+}));
+```
+
+### 6. Hooks para manejar datos (`useTasks.ts`)
+
+```typescript
+// src/hooks/useTasks.ts
+
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { fetchTasks, addTask, updateTask, deleteTask } from '../models/TaskModel';
+import { useTaskStore } from '../stores/useTaskStore';
+
+export const useTasks = () => {
+    const queryClient = useQueryClient();
+    const { setTasks } = useTaskStore();
+
+    const { data: tasks = [], isLoading } = useQuery(['tasks'], fetchTasks, {
+        onSuccess: setTasks,
+    });
+
+    const addTaskMutation = useMutation(addTask, {
+        onSuccess: () => queryClient.invalidateQueries(['tasks']),
+    });
+
+    const updateTaskMutation = useMutation(updateTask, {
+        onSuccess: () => queryClient.invalidateQueries(['tasks']),
+    });
+
+    const deleteTaskMutation = useMutation(deleteTask, {
+        onSuccess: () => queryClient.invalidateQueries(['tasks']),
+    });
+
+    return {
+        tasks,
+        isLoading,
+        addTask: addTaskMutation.mutate,
+        updateTask: updateTaskMutation.mutate,
+        deleteTask: deleteTaskMutation.mutate,
+    };
+};
+```
+
+### 7. Componente de Formulario (`TaskForm.tsx`)
+
+```typescript
+// src/components/TaskForm.tsx
+
+import React, { useState } from 'react';
+import { Task } from '../types/Task';
+
+interface TaskFormProps {
+    onSubmit: (task: Task) => void;
+    initialTask?: Task;
+}
+
+const TaskForm: React.FC<TaskFormProps> = ({ onSubmit, initialTask }) => {
+    const [title, setTitle] = useState(initialTask ? initialTask.title : '');
+
+    const handleSubmit = (event: React.FormEvent) => {
+        event.preventDefault();
+        if (title.trim()) {
+            onSubmit({ ...initialTask, title, id: initialTask ? initialTask.id : Date.now(), completed: false } as Task);
+            setTitle('');
+        }
+    };
+
+    return (
+        <form onSubmit={handleSubmit}>
+            <input
+                type="text"
+                placeholder="Nueva tarea"
+                value={title}
+                onChange={e => setTitle(e.target.value)}
+            />
+            <button type="submit">{initialTask ? 'Actualizar' : 'Agregar'}</button>
+        </form>
+    );
+};
+
+export default TaskForm;
+```
+
+### 8. Componente de Vista de Tareas (`TaskView.tsx`)
+
+```typescript
+// src/components/TaskView.tsx
+
+import React from 'react';
+import { Task } from '../types/Task';
+import TaskList from './TaskList';
+
+interface TaskViewProps {
+    tasks: Task[];
+    isLoading: boolean;
+    onEdit: (task: Task) => void;
+    onDelete: (id: number) => void;
+}
+
+const TaskView: React.FC<TaskViewProps> = ({ tasks, isLoading, onEdit, onDelete }) => {
+    if (isLoading) {
+        return <div>Cargando...</div>;
     }
 
     return (
         <div>
-            <h2>Detalles de la Tarea</h2>
-            <p>ID: {task.id}</p>
-            <p>Título: {task.title}</p>
-            <p>Completada: {task.completed ? 'Sí' : 'No'}</p>
-            <Link to="/">Volver a la lista de tareas</Link>
+            <h1>Lista de Tareas</h1>
+            <TaskList tasks={tasks} onEdit={onEdit} onDelete={onDelete} />
         </div>
     );
 };
 
-export default TaskDetailController;
+export default TaskView;
 ```
 
-### 5. Modificación del Controlador de Tareas (`TaskController.tsx`)
-
-Vamos a modificar el controlador de tareas para que también tenga acceso a la vista de detalles.
-
-```typescript
-// src/controllers/TaskController.tsx
-
-import React, { useState } from 'react';
-import { useTasks } from '../hooks/useTasks';
-import TaskView from '../components/TaskView';
-import TaskForm from '../components/TaskForm';
-import { Task } from '../types/Task';
-import { Link } from 'react-router-dom';
-
-const TaskController: React.FC = () => {
-    const { tasks, isLoading, addTask, updateTask, deleteTask } = useTasks();
-    const [editingTask, setEditingTask] = useState<Task | null>(null);
-
-    const handleEdit = (task: Task) => {
-        setEditingTask(task);
-    };
-
-    return (
-        <div>
-            <TaskForm onSubmit={editingTask ? updateTask : addTask} initialTask={editingTask} />
-            <TaskView tasks={tasks} isLoading={isLoading} onEdit={handleEdit} onDelete={deleteTask} />
-            <Link to="/tasks">Ver todas las tareas</Link>
-        </div>
-    );
-};
-
-export default TaskController;
-```
-
-### 6. Modificación de la Aplicación Principal (`App.tsx`)
-
-Integramos el enrutado y el diseño principal.
-
-```typescript
-// src/App.tsx
-
-import React from 'react';
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
-import TaskController from './controllers/TaskController';
-import TaskDetailController from './controllers/TaskDetailController';
-import MainLayout from './layouts/MainLayout';
-
-const App: React.FC = () => {
-    return (
-        <Router>
-            <MainLayout>
-                <Routes>
-                    <Route path="/" element={<TaskController />} />
-                    <Route path="/tasks" element={<TaskController />} />
-                    <Route path="/tasks/:id" element={<TaskDetailController />} />
-                </Routes>
-            </MainLayout>
-        </Router>
-    );
-};
-
-export default App;
-```
-
-### 7. Actualización de `TaskList.tsx`
-
-Modificamos el componente `TaskList` para incluir un enlace a los detalles de cada tarea.
+### 9. Componente de Lista de Tareas (`TaskList.tsx`)
 
 ```typescript
 // src/components/TaskList.tsx
@@ -233,10 +298,135 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, onEdit, onDelete }) => {
 export default TaskList;
 ```
 
-### Resultado
+### 10. Componente de Vista de Detalles de Tarea (`TaskDetailView.tsx`)
 
-- **Navegación**: Puedes navegar entre las vistas utilizando el encabezado y la barra de navegación.
-- **Lista de Tareas**: Puedes agregar, editar y eliminar tareas, y ver detalles de cada tarea.
-- **Detalles de Tareas**: Al hacer clic en "Detalles", puedes ver información específica sobre cada tarea.
+```typescript
+// src/components/TaskDetailView.tsx
+
+import React from 'react';
+import { Task } from '../types/Task';
+
+interface TaskDetailViewProps {
+    task: Task;
+}
+
+const TaskDetailView: React.FC<TaskDetailViewProps> = ({ task }) => {
+    return (
+        <div>
+            <h2>Detalles de la Tarea</h2>
+            <p>ID: {
+
+task.id}</p>
+            <p>Título: {task.title}</p>
+            <p>Completada: {task.completed ? 'Sí' : 'No'}</p>
+        </div>
+    );
+};
+
+export default TaskDetailView;
+```
+
+### 11. Controlador de Tareas (`TaskController.tsx`)
+
+```typescript
+// src/controllers/TaskController.tsx
+
+import React, { useState } from 'react';
+import { useTasks } from '../hooks/useTasks';
+import TaskView from '../components/TaskView';
+import TaskForm from '../components/TaskForm';
+import { Task } from '../types/Task';
+
+const TaskController: React.FC = () => {
+    const { tasks, isLoading, addTask, updateTask, deleteTask } = useTasks();
+    const [editingTask, setEditingTask] = useState<Task | null>(null);
+
+    const handleEdit = (task: Task) => {
+        setEditingTask(task);
+    };
+
+    const handleSubmit = (task: Task) => {
+        if (editingTask) {
+            updateTask(task);
+        } else {
+            addTask(task.title);
+        }
+        setEditingTask(null);
+    };
+
+    return (
+        <div>
+            <TaskForm onSubmit={handleSubmit} initialTask={editingTask} />
+            <TaskView tasks={tasks} isLoading={isLoading} onEdit={handleEdit} onDelete={deleteTask} />
+        </div>
+    );
+};
+
+export default TaskController;
+```
+
+### 12. Controlador de Detalles de Tareas (`TaskDetailController.tsx`)
+
+```typescript
+// src/controllers/TaskDetailController.tsx
+
+import React from 'react';
+import { useParams, Link } from 'react-router-dom';
+import { useTasks } from '../hooks/useTasks';
+import TaskDetailView from '../components/TaskDetailView';
+
+const TaskDetailController: React.FC = () => {
+    const { id } = useParams<{ id: string }>();
+    const { tasks } = useTasks();
+    const task = tasks.find(t => t.id === Number(id));
+
+    if (!task) {
+        return <div>Tarea no encontrada</div>; // Manejo de error
+    }
+
+    return (
+        <div>
+            <TaskDetailView task={task} />
+            <Link to="/">Volver a la lista de tareas</Link>
+        </div>
+    );
+};
+
+export default TaskDetailController;
+```
+
+### 13. Aplicación Principal (`App.tsx`)
+
+```typescript
+// src/App.tsx
+
+import React from 'react';
+import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import TaskController from './controllers/TaskController';
+import TaskDetailController from './controllers/TaskDetailController';
+import MainLayout from './layouts/MainLayout';
+
+const App: React.FC = () => {
+    return (
+        <Router>
+            <MainLayout>
+                <Routes>
+                    <Route path="/" element={<TaskController />} />
+                    <Route path="/tasks" element={<TaskController />} />
+                    <Route path="/tasks/:id" element={<TaskDetailController />} />
+                </Routes>
+            </MainLayout>
+        </Router>
+    );
+};
+
+export default App;
+```
 
 
+### Resumen
+
+- **Controladores**: `TaskController` y `TaskDetailController` gestionan la lógica y los datos.
+- **Vistas**: `TaskView`, `TaskList`, y `TaskDetailView` se centran solo en la presentación.
+  
+Esta estructura clara permite que la aplicación sea más fácil de mantener y escalar. 
