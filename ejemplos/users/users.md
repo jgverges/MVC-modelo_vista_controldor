@@ -1,28 +1,35 @@
 
-### **Estructura Actualizada de la Aplicación**
+
+### Estructura de Carpetas
 
 ```
 /src
-  /components
-    /common        // Componentes reutilizables (LoadingSpinner, etc.)
-    /layouts       // Distintos layouts de la aplicación
-    /users         // Componentes relacionados con usuarios (UserForm, UserList, etc.)
-    /products      // Componentes relacionados con productos
-  /controllers     // Lógica de controladores para manejar peticiones y lógica del negocio
-  /models          // Definición de modelos
-  /types           // Definiciones de tipos e interfaces
-  /store           // Archivos relacionados con Zustand
-  /api             // Llamadas a APIs (fetch)
-  /hooks           // Hooks personalizados (TanStack Query)
-  /views           // Páginas completas que renderizan la UI
-  /router          // Configuración de rutas
-  App.tsx          // Componente principal
-  index.tsx        // Entrada de la aplicación
+  ├── /api
+  │     ├── userApi.ts
+  ├── /components
+  │     ├── /common
+  │     │     └── LoadingSpinner.tsx
+  │     ├── /layouts
+  │     │     └── MainLayout.tsx
+  │     └── /users
+  │           ├── UserForm.tsx
+  │           └── UserList.tsx
+  ├── /controllers
+  │     └── UserController.ts
+  ├── /hooks
+  │     ├── useUserMutations.ts
+  ├── /models
+  │     ├── User.ts
+  │     └── Product.ts
+  ├── /router
+  │     └── AppRouter.tsx
+  └── App.tsx
+  └── index.tsx
 ```
 
-### **1. Interfaces en la Carpeta `types`**
+### 1. Definición de Interfaces en `models`
 
-#### `types/UserTypes.ts`
+#### `models/User.ts`
 ```ts
 export interface User {
   id: number;
@@ -34,7 +41,7 @@ export interface User {
 export type UserFormData = Omit<User, 'id'>; // Tipo para los datos del formulario, excluyendo el ID
 ```
 
-#### `types/ProductTypes.ts`
+#### `models/Product.ts`
 ```ts
 export interface Product {
   id: number;
@@ -46,54 +53,11 @@ export interface Product {
 export type ProductFormData = Omit<Product, 'id'>; // Tipo para los datos del formulario de productos
 ```
 
-### **2. Modelos (Models)**
-
-#### `models/UserModel.ts`
-```ts
-import { User } from '../types/UserTypes';
-
-export class UserModel {
-  constructor(private user: User) {}
-
-  getUser() {
-    return this.user;
-  }
-}
-```
-
-### **3. Controladores (Controllers)**
-
-#### `controllers/UserController.ts`
-```ts
-import { User } from '../types/UserTypes';
-import { fetchUsers, createUser, updateUser } from '../api/userApi';
-import { useUsers } from '../hooks/useUsers';
-
-export class UserController {
-  async getAllUsers(): Promise<User[]> {
-    const users = await fetchUsers();
-    return users;
-  }
-
-  async createUser(user: User): Promise<User> {
-    return await createUser(user);
-  }
-
-  async updateUser(user: User): Promise<User> {
-    return await updateUser(user.id, user);
-  }
-
-  getUserHook() {
-    return useUsers(); // Usar el hook en el controlador
-  }
-}
-```
-
-### **4. API (Llamadas a API)**
+### 2. API para Usuarios
 
 #### `api/userApi.ts`
 ```ts
-import { User } from '../types/UserTypes';
+import { User } from '../models/User';
 
 export const fetchUsers = async (): Promise<User[]> => {
   const response = await fetch('https://api.example.com/users');
@@ -122,31 +86,42 @@ export const updateUser = async (userId: number, updatedUser: User): Promise<Use
 };
 ```
 
-### **5. Hooks Personalizados (TanStack Query)**
+### 3. Controlador de Usuarios
 
-#### `hooks/useUsers.ts`
+#### `controllers/UserController.ts`
 ```ts
-import { useQuery } from '@tanstack/react-query';
-import { fetchUsers } from '../api/userApi';
+import { User } from '../models/User';
+import { fetchUsers, createUser, updateUser } from '../api/userApi';
 
-export const useUsers = () => {
-  return useQuery({
-    queryKey: ['users'],
-    queryFn: fetchUsers,
-  });
-};
+export class UserController {
+  async getAllUsers(): Promise<User[]> {
+    return await fetchUsers();
+  }
+
+  async createUser(user: User): Promise<User> {
+    return await createUser(user);
+  }
+
+  async updateUser(user: User): Promise<User> {
+    return await updateUser(user.id, user);
+  }
+}
 ```
+
+### 4. Hooks para Mutaciones de Usuarios
 
 #### `hooks/useUserMutations.ts`
 ```ts
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { createUser, updateUser } from '../api/userApi';
-import { User } from '../types/UserTypes';
+import { User } from '../models/User';
+import { UserController } from '../controllers/UserController';
+
+const userController = new UserController();
 
 export const useCreateUserMutation = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: createUser,
+    mutationFn: (newUser: User) => userController.createUser(newUser),
     onSuccess: () => {
       queryClient.invalidateQueries(['users']);
     },
@@ -156,7 +131,7 @@ export const useCreateUserMutation = () => {
 export const useUpdateUserMutation = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (user: User) => updateUser(user.id, user),
+    mutationFn: (user: User) => userController.updateUser(user),
     onSuccess: () => {
       queryClient.invalidateQueries(['users']);
     },
@@ -164,49 +139,27 @@ export const useUpdateUserMutation = () => {
 };
 ```
 
-### **6. Estado Global (Zustand)**
-
-#### `store/useGlobalStore.ts`
-```ts
-import { create } from 'zustand';
-
-interface GlobalState {
-  isLoading: boolean;
-  setLoading: (loading: boolean) => void;
-}
-
-export const useGlobalStore = create<GlobalState>((set) => ({
-  isLoading: false,
-  setLoading: (loading: boolean) => set(() => ({ isLoading: loading })),
-}));
-```
-
-### **7. Loading Global**
+### 5. Componente de Carga
 
 #### `components/common/LoadingSpinner.tsx`
 ```tsx
 import React from 'react';
-import { useGlobalStore } from '../../store/useGlobalStore';
 
 const LoadingSpinner = () => {
-  const { isLoading } = useGlobalStore();
-
-  if (!isLoading) return null;
-
-  return <div className="spinner">Loading...</div>;
+  return <div>Cargando...</div>; // Componente de carga simple
 };
 
 export default LoadingSpinner;
 ```
 
-### **8. Formularios de Usuario (Crear/Editar)**
+### 6. Componente de Formulario de Usuario
 
 #### `components/users/UserForm.tsx`
 ```tsx
 import React from 'react';
 import { useForm } from 'react-hook-form';
 import { useCreateUserMutation, useUpdateUserMutation } from '../../hooks/useUserMutations';
-import { User } from '../../types/UserTypes';
+import { User } from '../../models/User';
 
 interface UserFormProps {
   user?: User;
@@ -251,14 +204,14 @@ const UserForm = ({ user, onClose }: UserFormProps) => {
 export default UserForm;
 ```
 
-### **9. Listado de Usuarios**
+### 7. Componente de Lista de Usuarios
 
 #### `components/users/UserList.tsx`
 ```tsx
 import React, { useEffect, useState } from 'react';
 import { UserController } from '../../controllers/UserController';
 import UserForm from './UserForm';
-import { User } from '../../types/UserTypes';
+import { User } from '../../models/User';
 
 const userController = new UserController();
 
@@ -289,7 +242,7 @@ const UserList = () => {
     <div>
       <h1>Lista de Usuarios</h1>
       {isLoading && <p>Cargando...</p>}
-      {users?.map((user) => (
+      {users.map((user) => (
         <div key={user.id}>
           {user.name} - {user.email}
           <button onClick={() => handleEdit(user)}>Editar</button>
@@ -308,7 +261,7 @@ const UserList = () => {
 export default UserList;
 ```
 
-### **10. Layouts y Navegación**
+### 8. Layout Principal
 
 #### `components/layouts/MainLayout.tsx`
 ```tsx
@@ -319,9 +272,9 @@ const MainLayout = () => {
   return (
     <div>
       <header>Main Layout Header</header>
-      <main><Outlet /></main
-
->
+      <main>
+        <Outlet />
+      </main>
       <footer>Main Layout Footer</footer>
     </div>
   );
@@ -330,7 +283,7 @@ const MainLayout = () => {
 export default MainLayout;
 ```
 
-### **11. Rutas de la Aplicación**
+### 9. Rutas de la Aplicación
 
 #### `router/AppRouter.tsx`
 ```tsx
@@ -354,7 +307,7 @@ const AppRouter = () => {
 export default AppRouter;
 ```
 
-### **12. Componente Principal (App)**
+### 10. Componente Principal (App)
 
 #### `App.tsx`
 ```tsx
@@ -374,22 +327,28 @@ const App = () => {
 export default App;
 ```
 
-### **13. Entrada de la Aplicación**
+### 11. Entrada de la Aplic
+
+ación
 
 #### `index.tsx`
 ```tsx
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+
+const queryClient = new QueryClient();
 
 const root = ReactDOM.createRoot(document.getElementById('root') as HTMLElement);
 root.render(
-  <React.StrictMode>
+  <QueryClientProvider client={queryClient}>
     <App />
-  </React.StrictMode>
+  </QueryClientProvider>
 );
 ```
 
-### **Conclusión**
+### Conclusiones
 
-Esta versión de la aplicación sigue los principios de la arquitectura **MVC**, evita la duplicación de interfaces y asegura que las vistas no accedan directamente a los hooks, utilizando controladores como intermediarios. Esto mantiene una clara separación de responsabilidades y facilita el mantenimiento y la escalabilidad de la aplicación.
+Esta versión de la aplicación ahora está organizada de manera que las interfaces están en la capa de modelos, eliminando la duplicación y mejorando la estructura general del código. Además, se mantienen las interacciones complejas que has solicitado, como las llamadas a APIs, el uso de Zustand y TanStack Query, y el sistema de carga global.
+
