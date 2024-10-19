@@ -1,6 +1,5 @@
-# MVC : User application
 
-### **Estructura de la Aplicación**
+### **Estructura Actualizada de la Aplicación**
 
 ```
 /src
@@ -21,11 +20,9 @@
   index.tsx        // Entrada de la aplicación
 ```
 
-### **1. Modelos de Datos (Models)**
+### **1. Interfaces en la Carpeta `types`**
 
-Los modelos contienen la estructura de datos que maneja la aplicación.
-
-#### `models/User.ts`
+#### `types/UserTypes.ts`
 ```ts
 export interface User {
   id: number;
@@ -33,9 +30,11 @@ export interface User {
   email: string;
   role: string;
 }
+
+export type UserFormData = Omit<User, 'id'>; // Tipo para los datos del formulario, excluyendo el ID
 ```
 
-#### `models/Product.ts`
+#### `types/ProductTypes.ts`
 ```ts
 export interface Product {
   id: number;
@@ -43,20 +42,37 @@ export interface Product {
   price: number;
   category: string;
 }
+
+export type ProductFormData = Omit<Product, 'id'>; // Tipo para los datos del formulario de productos
 ```
 
-### **2. Controladores (Controllers)**
+### **2. Modelos (Models)**
 
-Los controladores contienen la lógica de negocio de la aplicación.
+#### `models/UserModel.ts`
+```ts
+import { User } from '../types/UserTypes';
+
+export class UserModel {
+  constructor(private user: User) {}
+
+  getUser() {
+    return this.user;
+  }
+}
+```
+
+### **3. Controladores (Controllers)**
 
 #### `controllers/UserController.ts`
 ```ts
-import { User } from '../models/User';
+import { User } from '../types/UserTypes';
 import { fetchUsers, createUser, updateUser } from '../api/userApi';
+import { useUsers } from '../hooks/useUsers';
 
 export class UserController {
   async getAllUsers(): Promise<User[]> {
-    return await fetchUsers();
+    const users = await fetchUsers();
+    return users;
   }
 
   async createUser(user: User): Promise<User> {
@@ -66,16 +82,18 @@ export class UserController {
   async updateUser(user: User): Promise<User> {
     return await updateUser(user.id, user);
   }
+
+  getUserHook() {
+    return useUsers(); // Usar el hook en el controlador
+  }
 }
 ```
 
-### **3. API (Llamadas a API)**
-
-Las funciones que realizan las peticiones HTTP a la API.
+### **4. API (Llamadas a API)**
 
 #### `api/userApi.ts`
 ```ts
-import { User } from '../models/User';
+import { User } from '../types/UserTypes';
 
 export const fetchUsers = async (): Promise<User[]> => {
   const response = await fetch('https://api.example.com/users');
@@ -104,9 +122,7 @@ export const updateUser = async (userId: number, updatedUser: User): Promise<Use
 };
 ```
 
-### **4. Hooks Personalizados (TanStack Query)**
-
-Usamos **TanStack Query** para gestionar los datos de los usuarios.
+### **5. Hooks Personalizados (TanStack Query)**
 
 #### `hooks/useUsers.ts`
 ```ts
@@ -125,7 +141,7 @@ export const useUsers = () => {
 ```ts
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { createUser, updateUser } from '../api/userApi';
-import { User } from '../models/User';
+import { User } from '../types/UserTypes';
 
 export const useCreateUserMutation = () => {
   const queryClient = useQueryClient();
@@ -148,9 +164,7 @@ export const useUpdateUserMutation = () => {
 };
 ```
 
-### **5. Estado Global (Zustand)**
-
-Definimos un estado global que puede ser accedido desde cualquier componente para mostrar el estado de carga y otras configuraciones globales.
+### **6. Estado Global (Zustand)**
 
 #### `store/useGlobalStore.ts`
 ```ts
@@ -167,9 +181,7 @@ export const useGlobalStore = create<GlobalState>((set) => ({
 }));
 ```
 
-### **6. Loading Global**
-
-Un componente para mostrar el spinner de carga en cualquier parte de la aplicación, conectado a **Zustand**.
+### **7. Loading Global**
 
 #### `components/common/LoadingSpinner.tsx`
 ```tsx
@@ -187,16 +199,14 @@ const LoadingSpinner = () => {
 export default LoadingSpinner;
 ```
 
-### **7. Formularios de Usuario (Crear/Editar)**
-
-El formulario reutilizable para crear o editar un usuario, usando **react-hook-form**.
+### **8. Formularios de Usuario (Crear/Editar)**
 
 #### `components/users/UserForm.tsx`
 ```tsx
 import React from 'react';
 import { useForm } from 'react-hook-form';
 import { useCreateUserMutation, useUpdateUserMutation } from '../../hooks/useUserMutations';
-import { User } from '../../models/User';
+import { User } from '../../types/UserTypes';
 
 interface UserFormProps {
   user?: User;
@@ -241,20 +251,31 @@ const UserForm = ({ user, onClose }: UserFormProps) => {
 export default UserForm;
 ```
 
-### **8. Listado de Usuarios**
-
-Un componente que lista los usuarios y permite editar cada uno.
+### **9. Listado de Usuarios**
 
 #### `components/users/UserList.tsx`
 ```tsx
-import React, { useState } from 'react';
-import { useUsers } from '../../hooks/useUsers';
+import React, { useEffect, useState } from 'react';
+import { UserController } from '../../controllers/UserController';
 import UserForm from './UserForm';
-import { User } from '../../models/User';
+import { User } from '../../types/UserTypes';
+
+const userController = new UserController();
 
 const UserList = () => {
-  const { data: users, isLoading } = useUsers();
+  const [users, setUsers] = useState<User[]>([]);
+  const [isLoading, setLoading] = useState(true);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      const data = await userController.getAllUsers();
+      setUsers(data);
+      setLoading(false);
+    };
+
+    fetchData();
+  }, []);
 
   const handleEdit = (user: User) => {
     setSelectedUser(user);
@@ -287,9 +308,7 @@ const UserList = () => {
 export default UserList;
 ```
 
-### **9. Layouts y Navegación**
-
-Gestionamos las rutas con **React Router** y distintos layouts.
+### **10. Layouts y Navegación**
 
 #### `components/layouts/MainLayout.tsx`
 ```tsx
@@ -300,7 +319,9 @@ const MainLayout = () => {
   return (
     <div>
       <header>Main Layout Header</header>
-      <main><Outlet /></main>
+      <main><Outlet /></main
+
+>
       <footer>Main Layout Footer</footer>
     </div>
   );
@@ -309,12 +330,12 @@ const MainLayout = () => {
 export default MainLayout;
 ```
 
-#### `router/Router.tsx`
+### **11. Rutas de la Aplicación**
+
+#### `router/AppRouter.tsx`
 ```tsx
 import React from 'react';
-import { BrowserRouter as Router, Route, Routes
-
- } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import MainLayout from '../components/layouts/MainLayout';
 import UserList from '../components/users/UserList';
 
@@ -333,12 +354,12 @@ const AppRouter = () => {
 export default AppRouter;
 ```
 
-### **10. Componente Principal (App)**
+### **12. Componente Principal (App)**
 
 #### `App.tsx`
 ```tsx
 import React from 'react';
-import AppRouter from './router/Router';
+import AppRouter from './router/AppRouter';
 import LoadingSpinner from './components/common/LoadingSpinner';
 
 const App = () => {
@@ -353,9 +374,22 @@ const App = () => {
 export default App;
 ```
 
+### **13. Entrada de la Aplicación**
+
+#### `index.tsx`
+```tsx
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App';
+
+const root = ReactDOM.createRoot(document.getElementById('root') as HTMLElement);
+root.render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+```
+
 ### **Conclusión**
 
-
-Esta aplicación está estructurada con **MVC**, utilizando **Zustand** para el estado global (loading),
-
-**TanStack Query** para el manejo de datos, y distintas capas como los modelos, controladores, vistas y componentes reutilizables.
+Esta versión de la aplicación sigue los principios de la arquitectura **MVC**, evita la duplicación de interfaces y asegura que las vistas no accedan directamente a los hooks, utilizando controladores como intermediarios. Esto mantiene una clara separación de responsabilidades y facilita el mantenimiento y la escalabilidad de la aplicación.
