@@ -1,19 +1,11 @@
 
 
-### Estructura de Carpetas
+### Estructura de Carpetas Actualizada
 
 ```
 /src
   ├── /api
   │     ├── userApi.ts
-  ├── /components
-  │     ├── /common
-  │     │     └── LoadingSpinner.tsx
-  │     ├── /layouts
-  │     │     └── MainLayout.tsx
-  │     └── /users
-  │           ├── UserForm.tsx
-  │           └── UserList.tsx
   ├── /controllers
   │     └── UserController.ts
   ├── /hooks
@@ -23,211 +15,120 @@
   │     └── Product.ts
   ├── /router
   │     └── AppRouter.tsx
+  ├── /views
+  │     ├── UserView.tsx
+  │     ├── ProductView.tsx
+  │     ├── /common
+  │     │     └── LoadingSpinner.tsx
+  │     ├── /users
+  │           ├── UserForm.tsx
+  │           └── UserList.tsx
   └── App.tsx
   └── index.tsx
 ```
 
-### 1. Definición de Interfaces en `models`
+### Código Actualizado
+
+#### `api/userApi.ts`
+```typescript
+import axios from 'axios';
+import { User } from '../models/User';
+
+const API_URL = 'https://jsonplaceholder.typicode.com/users';
+
+export const fetchUsers = async (): Promise<User[]> => {
+  const response = await axios.get(API_URL);
+  return response.data;
+};
+
+export const createUser = async (user: User): Promise<User> => {
+  const response = await axios.post(API_URL, user);
+  return response.data;
+};
+
+export const updateUser = async (user: User): Promise<User> => {
+  const response = await axios.put(`${API_URL}/${user.id}`, user);
+  return response.data;
+};
+```
+
+#### `controllers/UserController.ts`
+```typescript
+import * as userApi from '../api/userApi';
+import { User } from '../models/User';
+
+export class UserController {
+  async getAllUsers(): Promise<User[]> {
+    return await userApi.fetchUsers();
+  }
+
+  async createUser(user: User): Promise<User> {
+    return await userApi.createUser(user);
+  }
+
+  async updateUser(user: User): Promise<User> {
+    return await userApi.updateUser(user);
+  }
+}
+```
+
+#### `hooks/useUserMutations.ts`
+```typescript
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { UserController } from '../controllers/UserController';
+import { User } from '../models/User';
+
+const userController = new UserController();
+
+export const useUserMutations = () => {
+  const queryClient = useQueryClient();
+
+  const createUserMutation = useMutation(userController.createUser, {
+    onSuccess: () => {
+      queryClient.invalidateQueries('users');
+    },
+  });
+
+  const updateUserMutation = useMutation(userController.updateUser, {
+    onSuccess: () => {
+      queryClient.invalidateQueries('users');
+    },
+  });
+
+  return { createUserMutation, updateUserMutation };
+};
+```
 
 #### `models/User.ts`
-```ts
+```typescript
 export interface User {
   id: number;
   name: string;
   email: string;
-  role: string;
-}
-
-export type UserFormData = Omit<User, 'id'>; // Tipo para los datos del formulario, excluyendo el ID
-```
-
-#### `models/Product.ts`
-```ts
-export interface Product {
-  id: number;
-  name: string;
-  price: number;
-  category: string;
-}
-
-export type ProductFormData = Omit<Product, 'id'>; // Tipo para los datos del formulario de productos
-```
-
-### 2. API para Usuarios
-
-#### `api/userApi.ts`
-```ts
-import { User } from '../models/User';
-
-export const fetchUsers = async (): Promise<User[]> => {
-  const response = await fetch('https://api.example.com/users');
-  if (!response.ok) throw new Error('Error fetching users');
-  return response.json();
-};
-
-export const createUser = async (newUser: User): Promise<User> => {
-  const response = await fetch('https://api.example.com/users', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(newUser),
-  });
-  if (!response.ok) throw new Error('Error creating user');
-  return response.json();
-};
-
-export const updateUser = async (userId: number, updatedUser: User): Promise<User> => {
-  const response = await fetch(`https://api.example.com/users/${userId}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(updatedUser),
-  });
-  if (!response.ok) throw new Error('Error updating user');
-  return response.json();
-};
-```
-
-### 3. Controlador de Usuarios
-
-#### `controllers/UserController.ts`
-```ts
-import { User } from '../models/User';
-import { fetchUsers, createUser, updateUser } from '../api/userApi';
-
-export class UserController {
-  async getAllUsers(): Promise<User[]> {
-    return await fetchUsers();
-  }
-
-  async createUser(user: User): Promise<User> {
-    return await createUser(user);
-  }
-
-  async updateUser(user: User): Promise<User> {
-    return await updateUser(user.id, user);
-  }
 }
 ```
 
-### 4. Hooks para Mutaciones de Usuarios
-
-#### `hooks/useUserMutations.ts`
-```ts
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+#### `views/UserView.tsx`
+```tsx
+import React, { useEffect, useState } from 'react';
+import UserForm from './users/UserForm';
+import UserList from './users/UserList';
 import { User } from '../models/User';
 import { UserController } from '../controllers/UserController';
 
 const userController = new UserController();
 
-export const useCreateUserMutation = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (newUser: User) => userController.createUser(newUser),
-    onSuccess: () => {
-      queryClient.invalidateQueries(['users']);
-    },
-  });
-};
-
-export const useUpdateUserMutation = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (user: User) => userController.updateUser(user),
-    onSuccess: () => {
-      queryClient.invalidateQueries(['users']);
-    },
-  });
-};
-```
-
-### 5. Componente de Carga
-
-#### `components/common/LoadingSpinner.tsx`
-```tsx
-import React from 'react';
-
-const LoadingSpinner = () => {
-  return <div>Cargando...</div>; // Componente de carga simple
-};
-
-export default LoadingSpinner;
-```
-
-### 6. Componente de Formulario de Usuario
-
-#### `components/users/UserForm.tsx`
-```tsx
-import React from 'react';
-import { useForm } from 'react-hook-form';
-import { useCreateUserMutation, useUpdateUserMutation } from '../../hooks/useUserMutations';
-import { User } from '../../models/User';
-
-interface UserFormProps {
-  user?: User;
-  onClose: () => void;
-}
-
-const UserForm = ({ user, onClose }: UserFormProps) => {
-  const { register, handleSubmit, reset } = useForm<User>({
-    defaultValues: user || { name: '', email: '', role: '' },
-  });
-
-  const createUserMutation = useCreateUserMutation();
-  const updateUserMutation = useUpdateUserMutation();
-
-  const onSubmit = (data: User) => {
-    if (user) {
-      updateUserMutation.mutate(data, { onSuccess: () => { reset(); onClose(); } });
-    } else {
-      createUserMutation.mutate(data, { onSuccess: () => { reset(); onClose(); } });
-    }
-  };
-
-  return (
-    <form onSubmit={handleSubmit(onSubmit)}>
-      <div>
-        <label>Nombre</label>
-        <input {...register('name')} />
-      </div>
-      <div>
-        <label>Email</label>
-        <input {...register('email')} />
-      </div>
-      <div>
-        <label>Rol</label>
-        <input {...register('role')} />
-      </div>
-      <button type="submit">{user ? 'Actualizar' : 'Crear'}</button>
-    </form>
-  );
-};
-
-export default UserForm;
-```
-
-### 7. Componente de Lista de Usuarios
-
-#### `components/users/UserList.tsx`
-```tsx
-import React, { useEffect, useState } from 'react';
-import { UserController } from '../../controllers/UserController';
-import UserForm from './UserForm';
-import { User } from '../../models/User';
-
-const userController = new UserController();
-
-const UserList = () => {
-  const [users, setUsers] = useState<User[]>([]);
-  const [isLoading, setLoading] = useState(true);
+const UserView = () => {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [users, setUsers] = useState<User[]>([]);
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchUsers = async () => {
       const data = await userController.getAllUsers();
       setUsers(data);
-      setLoading(false);
     };
-
-    fetchData();
+    
+    fetchUsers();
   }, []);
 
   const handleEdit = (user: User) => {
@@ -240,14 +141,8 @@ const UserList = () => {
 
   return (
     <div>
-      <h1>Lista de Usuarios</h1>
-      {isLoading && <p>Cargando...</p>}
-      {users.map((user) => (
-        <div key={user.id}>
-          {user.name} - {user.email}
-          <button onClick={() => handleEdit(user)}>Editar</button>
-        </div>
-      ))}
+      <h1>Gestión de Usuarios</h1>
+      <UserList users={users} onEdit={handleEdit} />
       {selectedUser && (
         <div>
           <h2>Editar Usuario</h2>
@@ -258,47 +153,112 @@ const UserList = () => {
   );
 };
 
-export default UserList;
+export default UserView;
 ```
 
-### 8. Layout Principal
+#### `views/users/UserForm.tsx`
+```tsx
+import React, { useState, useEffect } from 'react';
+import { User } from '../../models/User';
+import { useUserMutations } from '../../hooks/useUserMutations';
 
-#### `components/layouts/MainLayout.tsx`
+interface UserFormProps {
+  user: User;
+  onClose: () => void;
+}
+
+const UserForm: React.FC<UserFormProps> = ({ user, onClose }) => {
+  const { updateUserMutation } = useUserMutations();
+  const [formData, setFormData] = useState<User>(user);
+
+  useEffect(() => {
+    setFormData(user);
+  }, [user]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    updateUserMutation.mutate(formData);
+    onClose();
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <input
+        type="text"
+        name="name"
+        value={formData.name}
+        onChange={handleChange}
+      />
+      <input
+        type="email"
+        name="email"
+        value={formData.email}
+        onChange={handleChange}
+      />
+      <button type="submit">Guardar</button>
+      <button type="button" onClick={onClose}>Cancelar</button>
+    </form>
+  );
+};
+
+export default UserForm;
+```
+
+#### `views/users/UserList.tsx`
 ```tsx
 import React from 'react';
-import { Outlet } from 'react-router-dom';
+import { User } from '../../models/User';
 
-const MainLayout = () => {
+interface UserListProps {
+  users: User[];
+  onEdit: (user: User) => void;
+}
+
+const UserList: React.FC<UserListProps> = ({ users, onEdit }) => {
   return (
     <div>
-      <header>Main Layout Header</header>
-      <main>
-        <Outlet />
-      </main>
-      <footer>Main Layout Footer</footer>
+      <h2>Lista de Usuarios</h2>
+      {users.map((user) => (
+        <div key={user.id}>
+          {user.name} - {user.email}
+          <button onClick={() => onEdit(user)}>Editar</button>
+        </div>
+      ))}
     </div>
   );
 };
 
-export default MainLayout;
+export default UserList;
 ```
 
-### 9. Rutas de la Aplicación
+#### `views/common/LoadingSpinner.tsx`
+```tsx
+import React from 'react';
+
+const LoadingSpinner = () => (
+  <div>
+    <p>Cargando...</p>
+  </div>
+);
+
+export default LoadingSpinner;
+```
 
 #### `router/AppRouter.tsx`
 ```tsx
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import MainLayout from '../components/layouts/MainLayout';
-import UserList from '../components/users/UserList';
+import UserView from '../views/UserView';
 
 const AppRouter = () => {
   return (
     <Router>
       <Routes>
-        <Route path="/" element={<MainLayout />}>
-          <Route path="users" element={<UserList />} />
-        </Route>
+        <Route path="/" element={<UserView />} />
       </Routes>
     </Router>
   );
@@ -307,48 +267,33 @@ const AppRouter = () => {
 export default AppRouter;
 ```
 
-### 10. Componente Principal (App)
-
 #### `App.tsx`
 ```tsx
 import React from 'react';
 import AppRouter from './router/AppRouter';
-import LoadingSpinner from './components/common/LoadingSpinner';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
-const App = () => {
-  return (
-    <div>
-      <LoadingSpinner />
-      <AppRouter />
-    </div>
-  );
-};
+const queryClient = new QueryClient();
+
+const App = () => (
+  <QueryClientProvider client={queryClient}>
+    <AppRouter />
+  </QueryClientProvider>
+);
 
 export default App;
 ```
-
-### 11. Entrada de la Aplic
-
-ación
 
 #### `index.tsx`
 ```tsx
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-
-const queryClient = new QueryClient();
 
 const root = ReactDOM.createRoot(document.getElementById('root') as HTMLElement);
-root.render(
-  <QueryClientProvider client={queryClient}>
-    <App />
-  </QueryClientProvider>
-);
+root.render(<App />);
 ```
 
 ### Conclusiones
 
-Esta versión de la aplicación ahora está organizada de manera que las interfaces están en la capa de modelos, eliminando la duplicación y mejorando la estructura general del código. Además, se mantienen las interacciones complejas que has solicitado, como las llamadas a APIs, el uso de Zustand y TanStack Query, y el sistema de carga global.
-
+Con estos cambios, hemos asegurado que la estructura del proyecto siga el modelo MVC y que todos los componentes relacionados con las vistas estén organizados de manera clara dentro de la carpeta `views`. 
