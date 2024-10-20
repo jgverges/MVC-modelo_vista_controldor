@@ -19,6 +19,42 @@ export function getBookController() {
 }
 ```
 
+#### **1. BookModel.ts**
+```typescript
+export class BookModel {
+  books = [
+    { id: 1, title: 'The Great Gatsby', author: 'F. Scott Fitzgerald' },
+    { id: 2, title: '1984', author: 'George Orwell' },
+    { id: 3, title: 'To Kill a Mockingbird', author: 'Harper Lee' },
+  ];
+
+  getBooks() {
+    return this.books;
+  }
+
+  getBookById(id: number) {
+    return this.books.find(book => book.id === id);
+  }
+}
+```
+
+#### **2. BookController.ts**
+```typescript
+import { BookModel } from './BookModel';
+
+export class BookController {
+  constructor(public model: BookModel) {}
+
+  getBooks() {
+    return this.model.getBooks();
+  }
+
+  getBookById(id: number) {
+    return this.model.getBookById(id);
+  }
+}
+```
+
 #### **2. Main.tsx**
 El componente principal, que obtiene el controlador usando el singleton.
 
