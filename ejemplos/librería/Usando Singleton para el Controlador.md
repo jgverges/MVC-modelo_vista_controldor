@@ -1,4 +1,4 @@
-# **Versión 2: Usando Singleton para el Controlador**
+# Versión 2: Usando Singleton para el Controlador compartido
 
 En esta versión, aseguramos que solo exista una instancia del controlador mediante el patrón **singleton**.
 
