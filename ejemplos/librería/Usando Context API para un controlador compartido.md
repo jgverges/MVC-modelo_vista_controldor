@@ -177,3 +177,12 @@ export default function Contact() {
 }
 ```
 
+```
+
+## Conclusión:
+
+Ambas versiones garantizan que se use la misma instancia del controlador en toda la aplicación. 
+
+**Context API** permite una mayor flexibilidad para manejar controladores específicos en diferentes áreas de la aplicación, 
+
+**singleton** es más directa y simple, adecuada para aplicaciones pequeñas o medianas.
