@@ -1,3 +1,5 @@
+// counter MVC en Typescript
+
 // MODEL
 class Count {
   constructor(private count: number = 0) {}
