@@ -42,7 +42,9 @@ class LoggerView implements View {
 
 // Usage
 const main = new Controller(new Count(), new LoggerView());
-console.log("ON");
+
+
+
 main.get();
 main.increment();
 main.increment();
